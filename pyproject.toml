@@ -4,9 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "minishell"
-version = "2.0.0"
+version = "2.0.4"
 authors = [
-  { name="y9san9", email="pypi@y9san9.me" },
+  { name = "y9san9", email = "pypi@y9san9.me" },
 ]
 description = "Bash replacement library for Python"
 readme = "README.md"

@@ -31,6 +31,10 @@ from dataclasses import dataclass
 from typing import override
 
 
+__all__ = ["ExecResult", "ReadResult", "Shell", "shell", "Read",
+           "ArgsNamespace", "TempFile"]
+
+
 @dataclass
 class ExecResult:
     ok: bool
