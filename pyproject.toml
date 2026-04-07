@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "minishell"
-version = "2.0.4"
+version = "2.0.5"
 authors = [
   { name = "y9san9", email = "pypi@y9san9.me" },
 ]

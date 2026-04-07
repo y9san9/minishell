@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+
+from minishell import shell
+
+shell("rm -r dist 2>/dev/null", exit_on_error=False)
+shell("python3 -m build")
+shell("python3 -m twine upload dist/* --verbose")
+

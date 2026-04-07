@@ -27,25 +27,9 @@ import sys
 import subprocess
 import tempfile
 import shlex
-from dataclasses import dataclass
-from typing import override
 
 
-__all__ = ["ExecResult", "ReadResult", "Shell", "shell", "Read",
-           "ArgsNamespace", "TempFile"]
-
-
-@dataclass
-class ExecResult:
-    ok: bool
-    code: int
-
-
-@dataclass
-class ReadResult:
-    ok: bool
-    code: int
-    output: str
+__all__ = ["Shell", "shell", "ArgsNamespace", "TempFile"]
 
 
 class Shell:
@@ -54,7 +38,7 @@ class Shell:
     def __init__(self):
         self.args = _parse_args()
 
-    def __call__(self, cmd: str, *args: str, exit_on_error: bool = True) -> ExecResult:
+    def __call__(self, cmd: str, *args: str, exit_on_error: bool = True) -> int:
         """
         Execute command with optional argument escaping and TTY support.
 
@@ -77,28 +61,31 @@ class Shell:
             print(message)
         sys.exit(code)
 
-    @property
-    def read(self) -> Read:
-        return Read()
-
-    @property
-    def temp(self) -> TempFile:
-        return TempFile()
-
-
-class Read:
-    def __call__(self, cmd: str, *args: str) -> ReadResult:
+    def read(
+        self,
+        cmd: str,
+        *args: str,
+        exit_on_error: bool = True,
+    ):
         """
         Read output from command with optional argument escaping.
 
         Usage:
             shell.read("ls -la")
             shell.read("find {} -name {}", "/path", "*.py")
+
+        Returns:
+            Either str if exit_on_error is True or tuple[str, int] with both
+            output and code if exit_on_error is False.
         """
         if args:
             escaped_args = [shlex.quote(str(arg)) for arg in args]
             cmd = cmd.format(*escaped_args)
-        return _read_raw(cmd)
+        return _read_raw(cmd, exit_on_error)
+
+    @property
+    def temp(self) -> TempFile:
+        return TempFile()
 
 
 class ArgsNamespace:
@@ -144,7 +131,6 @@ class TempFile:
         except:
             return ""
 
-    @override
     def __str__(self):
         return self.path
 
@@ -223,25 +209,19 @@ def _parse_args():
     return ArgsNamespace(positional, named)
 
 
-def _run_raw(cmd: str, exit_on_error: bool = True) -> ExecResult:
+def _run_raw(cmd: str, exit_on_error: bool = True) -> int:
     cmd = cmd.strip()
     try:
         result = subprocess.run(cmd, shell=True)
     except KeyboardInterrupt:
         sys.exit(0)
 
-    exec_result = ExecResult(
-        ok=result.returncode == 0,
-        code=result.returncode,
-    )
+    if result.returncode != 0 and exit_on_error:
+        sys.exit(result.returncode)
 
-    if not exec_result.ok and exit_on_error:
-        sys.exit(exec_result.code)
+    return result.returncode
 
-    return exec_result
-
-
-def _read_raw(cmd: str) -> ReadResult:
+def _read_raw(cmd: str, exit_on_error: bool):
     cmd = cmd.strip()
     try:
         result = subprocess.run(
@@ -250,13 +230,18 @@ def _read_raw(cmd: str) -> ReadResult:
             capture_output=True,
             text=True,
         )
-        return ReadResult(
-            ok=result.returncode == 0,
-            code=result.returncode,
-            output=result.stdout.strip(),
-        )
+        if exit_on_error:
+            if result.returncode == 0:
+                return result.stdout.strip()
+            else:
+                print(result.stdout.strip())
+                print(result.stderr.strip())
+                sys.exit(result.returncode)
+        return result.stdout.strip() or "", result.returncode
+    except KeyboardInterrupt as e:
+        raise e
     except Exception:
-        return ReadResult(ok=False, code=1, output="")
+        return "", 1
 
 
 shell = Shell()
