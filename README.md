@@ -87,16 +87,6 @@ if isinstance(shell.args.file, list):
         print(f)
 ```
 
-### `shell.temp()`
-
-Context manager for temporary files.
-```python
-with shell.temp() as tmp:
-    shell(f"command > {tmp}")
-    result = tmp.read()
-    # file auto-deleted on exit
-```
-
 ## Installation
 ```bash
 pip install minishell

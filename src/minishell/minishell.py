@@ -22,15 +22,13 @@ Example:
     print(shell.args.config)    # Named argument, dict if multiple provided
 """
 
-import os
 import sys
 import subprocess
-import tempfile
 import shlex
 from typing import overload
 
 
-__all__ = ["Shell", "shell", "ArgsNamespace", "TempFile"]
+__all__ = ["Shell", "shell", "ArgsNamespace"]
 
 
 class Shell:
@@ -101,10 +99,6 @@ class Shell:
             print(message)
         sys.exit(code)
 
-    @property
-    def temp(self) -> TempFile:
-        return TempFile()
-
 
 class ArgsNamespace:
     _positional: list[str]
@@ -120,9 +114,41 @@ class ArgsNamespace:
     @overload
     def __getitem__(self, key: str) -> str | list[str] | None: ...
 
-    def __getitem__(self, key: str | int) -> str | list[str] | None:
+    @overload
+    def __getitem__(self, key: tuple[str, ...]) -> str | list[str] | None:
+        """
+        This overload merges keys you provided into a single list or string.
+        Useful to combine shorthand and full property names.
+
+        Example:
+            program -I test --interface prod
+
+            If `values = shell.args["I", "interface"]` is used, you get both
+            values.
+        """
+
+    def __getitem__(self, key: str | int | tuple[str, ...]) -> str | list[str] | None:
         if isinstance(key, int):
             return self._positional[key] if 0 <= key < len(self._positional) else None
+        # The Merger (read the doc for this overload)
+        if isinstance(key, tuple):
+            result: str | list[str] | None = None
+            def append(value: str):
+                nonlocal result
+                if result is None:
+                    result = value
+                else:
+                    if isinstance(result, str):
+                        result = [result]
+                    result.append(value)
+            for item in key:
+                values = self._named.get(item)
+                if isinstance(values, str):
+                    append(values)
+                elif isinstance(values, list):
+                    for value in values:
+                        append(value)
+            return result
         return self._named.get(key)
 
     def __getattr__(self, key: str) -> str | list[str] | None:
@@ -131,81 +157,50 @@ class ArgsNamespace:
         return self._named.get(key)
 
 
-class TempFile:
-    def __enter__(self):
-        self.file = tempfile.NamedTemporaryFile(
-            mode='w+',
-            delete=False,
-            prefix='shell_py_'
-        )
-        self.path = self.file.name
-        self.file.close()
-        return self
-
-    def __exit__(self, *_):
-        try:
-            os.remove(self.path)
-        except:
-            pass
-
-    def read(self):
-        try:
-            with open(self.path, 'r') as f:
-                return f.read().strip()
-        except:
-            return ""
-
-    def __str__(self):
-        return self.path
-
-
 def _parse_args():
     """
     Parse command-line arguments.
 
     Supports:
     - Positional: args[0], args[1], ...
-    - Long options: --name, --name=value, --name value
-    - Short options: -x, -x value
+    - Long options: --name, --name value
+    - Short options: -x, -x value, -xyz
     - Repeated options become lists
     - Dashes in names converted to underscores
+    - Use -- to stop parsing named parameters
     """
     positional: list[str] = []
     named: dict[str, str | list[str]] = {}
 
     argv = sys.argv
     i = 0
+    stop_named = False
+
+    def named_append(key: str, value: str):
+        if key not in named:
+            named[key] = value
+        else:
+            cached = named[key]
+            if isinstance(cached, str):
+                cached = [cached]
+            cached.append(value)
+            named[key] = cached
 
     while i < len(argv):
         arg = argv[i]
 
-        # Long option: --key or --key=value
-        if arg.startswith("--"):
+        if stop_named:
+            positional.append(arg)
+            i += 1
+            continue
+
+        if arg == "--":
+            stop_named = True
+            i += 1
+            continue
+
+        if arg.startswith("--") and not stop_named:
             key = arg[2:]
-            key = key.split("=")[0]
-            key = key.replace("-", "_")
-
-            if "=" in arg:
-                value = arg.split("=", 1)[1]
-            elif i + 1 < len(argv) and not argv[i + 1].startswith("-"):
-                value = argv[i + 1]
-                i += 1
-            else:
-                value = "True"
-
-            # Handle multiple occurrences
-            if key in named:
-                cached = named[key]
-                if isinstance(cached, str):
-                    cached = [cached]
-                cached.append(value)
-                named[key] = cached
-            else:
-                named[key] = value
-
-        # Short option: -x
-        elif arg.startswith("-") and arg != "-":
-            key = arg[1:]
             key = key.replace("-", "_")
 
             if i + 1 < len(argv) and not argv[i + 1].startswith("-"):
@@ -214,17 +209,29 @@ def _parse_args():
             else:
                 value = "True"
 
-            # Handle multiple occurrences
-            if key in named:
-                cached = named[key]
-                if isinstance(cached, str):
-                    cached = [cached]
-                cached.append(value)
-                named[key] = cached
-            else:
-                named[key] = value
+            named_append(key, value)
 
-        # Positional argument
+        # Short option(s): -x or combined -xyz
+        elif arg.startswith("-") and arg != "-" and not stop_named:
+            flags = arg[1:]
+
+            for key in flags[:-1]:
+                named_append(key, "True")
+
+            last = flags[-1]
+
+            # Idk how to better interpret this. On one hand there's sed that
+            # allows us to do 'sed -Ep program', on the other hand you may not
+            # expect that the last flag consumes things. So as of now the only
+            # way to pass value to shorthand flag is to separate it from other
+            # flags
+            if len(flags) == 1 and i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+                value = argv[i + 1]
+                i += 1
+            else:
+                value = "True"
+
+            named_append(last, value)
         else:
             positional.append(arg)
 
