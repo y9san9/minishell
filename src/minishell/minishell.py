@@ -27,6 +27,7 @@ import sys
 import subprocess
 import tempfile
 import shlex
+from typing import overload
 
 
 __all__ = ["Shell", "shell", "ArgsNamespace", "TempFile"]
@@ -56,17 +57,12 @@ class Shell:
 
         return _run_raw(cmd, exit_on_error)
 
-    def exit(self, message: str = "", code: int = 1):
-        if message:
-            print(message)
-        sys.exit(code)
-
     def read(
         self,
         cmd: str,
         *args: str,
         exit_on_error: bool = True,
-    ):
+    ) -> tuple[str, int]:
         """
         Read output from command with optional argument escaping.
 
@@ -83,6 +79,28 @@ class Shell:
             cmd = cmd.format(*escaped_args)
         return _read_raw(cmd, exit_on_error)
 
+    def __getitem__(
+        self,
+        item: str | tuple[str, ...],
+    ) -> str:
+        """
+        Syntactic sugar for read with exit_on_error always True.
+        You are getting the output and that's the mental model.
+        """
+        if isinstance(item, tuple):
+            cmd = item[0]
+            args = item[1:]
+        else:
+            cmd = item
+            args = ()
+        return self.read(cmd, *args)[0]
+
+
+    def exit(self, message: str = "", code: int = 1):
+        if message:
+            print(message)
+        sys.exit(code)
+
     @property
     def temp(self) -> TempFile:
         return TempFile()
@@ -96,7 +114,13 @@ class ArgsNamespace:
         self._positional = positional
         self._named = named
 
-    def __getitem__(self, key: str | int):
+    @overload
+    def __getitem__(self, key: int) -> str | None: ...
+
+    @overload
+    def __getitem__(self, key: str) -> str | list[str] | None: ...
+
+    def __getitem__(self, key: str | int) -> str | list[str] | None:
         if isinstance(key, int):
             return self._positional[key] if 0 <= key < len(self._positional) else None
         return self._named.get(key)
@@ -216,7 +240,7 @@ def _run_raw(cmd: str, exit_on_error: bool = True) -> int:
     except KeyboardInterrupt:
         sys.exit(0)
 
-    if result.returncode != 0 and exit_on_error:
+    if exit_on_error and result.returncode != 0:
         sys.exit(result.returncode)
 
     return result.returncode
@@ -230,13 +254,10 @@ def _read_raw(cmd: str, exit_on_error: bool):
             capture_output=True,
             text=True,
         )
-        if exit_on_error:
-            if result.returncode == 0:
-                return result.stdout.strip()
-            else:
-                print(result.stdout.strip())
-                print(result.stderr.strip())
-                sys.exit(result.returncode)
+        if exit_on_error and result.returncode != 0:
+            print(result.stdout.strip())
+            print(result.stderr.strip())
+            sys.exit(result.returncode)
         return result.stdout.strip() or "", result.returncode
     except KeyboardInterrupt as e:
         raise e

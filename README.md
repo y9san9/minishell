@@ -20,7 +20,7 @@ Bash works because it's **the** shell. You can't replicate that. But you can mak
 `minishell` provides just what you need:
 
 - `shell(cmd, *args)` - Run commands with full TTY support and optional argument escaping
-- `shell.read(cmd, *args)` - Capture output
+- `shell[cmd, *args]` - Same as previous, but capture output
 - `shell.args[1], shell.args.named_argument` - Parse CLI arguments automatically
 
 That's it. No frameworks, no magic.
@@ -36,7 +36,7 @@ filename = "file with spaces.txt"
 shell("rm {}", filename)
 
 # Capture output
-result = shell.read("pwd")
+result = shell["pwd"]
 print("Current dir:", result.output)
 
 # Arguments are auto-parsed
@@ -61,15 +61,13 @@ shell("echo {}", "hello")                # with escaping
 shell("ls", exit_on_error=False)         # don't exit on error
 ```
 
-### `shell.read(cmd, *args)`
+### `shell[cmd, *args]`
 
 Execute command and capture output.
 
 ```python
-result = shell.read("pwd")
-print(result.output)
-print(result.code)
-print(result.ok)
+result = shell["pwd"]
+print(result)
 ```
 
 ### `shell.args`
