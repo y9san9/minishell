@@ -19,8 +19,8 @@ Bash works because it's **the** shell. You can't replicate that. But you can mak
 
 `minishell` provides just what you need:
 
-- `shell(cmd, *args)` - Run commands with full TTY support and optional argument escaping
-- `shell[cmd, *args]` - Same as previous, but capture output
+- `shell(cmd, *args, **kwargs)` - Run commands with full TTY support and optional argument escaping
+- `shell[cmd, *args, **kwargs]` - Same as previous, but capture output
 - `shell.args[1], shell.args.named_argument` - Parse CLI arguments automatically
 
 That's it. No frameworks, no magic.
@@ -45,41 +45,38 @@ if not app_name:
     shell.exit("Error: --app-name required")
 ```
 
-## API
+## Main API
 
-### `shell(cmd, *args)`
+There are more things, but you may need to read source code.
+
+### `shell(cmd, *args, **kwargs)`
 
 Execute a command with optional argument escaping.
 
 - **cmd**: Command string with optional `{}` placeholders
-- **args**: Arguments to format and escape
+- **args**: Positional arguments to format and escape
+- **kwargs**: Named arguments to format and escape
 
 ```python
-shell("echo hello")           # raw
-shell("echo {}", "hello")     # with escaping
+# raw
+shell("echo hello")
+# positional escaping
+shell("echo {}", "hello")
+# named escaping
+shell("git commit -m {message}", message="Fix#147")
 ```
 
 ### `shell[cmd, *args]`
 
 Execute command and capture output. Returns the output string.
 
+- **cmd**: Command string with optional `{}` placeholders
+- **args**: Positional arguments to format and escape
+
 ```python
 output = shell["pwd"]
 # With escaped arguments
 output = shell["find {} -name {}", "/path", "*.py"]
-```
-
-### `shell.read(cmd, *args, exit_on_error=False)`
-
-Execute command and capture output with more control.
-
-- Returns `tuple[output, exit_code]`
-- Set `exit_on_error=True` to exit on non-zero code
-  (usually it's better to use `shell[cmd, *args]` instead)
-
-```python
-output, code = shell.read("ls")
-output, code = shell.read("find {} -name {}", "/path", "*.py", exit_on_error=True)
 ```
 
 ### `shell.args`

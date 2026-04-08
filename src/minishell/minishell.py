@@ -25,19 +25,20 @@ Example:
 import sys
 import subprocess
 import shlex
-from typing import overload
+from typing import final, overload
 
 
-__all__ = ["Shell", "shell", "ArgsNamespace"]
+__all__ = ["Shell", "shell", "ArgsNamespace", "Color"]
 
 
+@final
 class Shell:
-    args: ArgsNamespace
-
     def __init__(self):
         self.args = _parse_args()
+        self.color = Color()
 
-    def __call__(self, cmd: str, *args: str):
+
+    def __call__(self, cmd: str, *args: str, **kwargs: str):
         """
         Execute command with optional argument escaping and TTY support.
 
@@ -47,12 +48,9 @@ class Shell:
         Usage:
             shell("ls -la | grep test")  # raw
             shell("echo {}", "hello")    # with escaping
-            shell("git commit -m {}", "Fix #123")
+            shell("git commit -m {message}", message="Fix #123")
         """
-        if args:
-            escaped_args = [shlex.quote(str(arg)) for arg in args]
-            cmd = cmd.format(*escaped_args)
-
+        cmd = self.prepare(cmd, *args, **kwargs)
         _run_raw(cmd)
 
     def read(
@@ -60,17 +58,16 @@ class Shell:
         cmd: str,
         *args: str,
         exit_on_error: bool = False,
+        **kwargs: str,
     ) -> tuple[str, int]:
         """
         Read output from command with optional argument escaping.
 
         Usage:
             shell.read("ls -la")
-            shell.read("find {} -name {}", "/path", "*.py")
+            shell.read("find {} -name {format}", "/path", format="*.py")
         """
-        if args:
-            escaped_args = [shlex.quote(str(arg)) for arg in args]
-            cmd = cmd.format(*escaped_args)
+        cmd = self.prepare(cmd, *args, **kwargs)
         return _read_raw(cmd, exit_on_error)
 
     def __getitem__(
@@ -89,17 +86,66 @@ class Shell:
             args = ()
         return self.read(cmd, *args, exit_on_error=True)[0]
 
+    def prepare(self, cmd: str, *args: str, **kwargs: str):
+        escaped_args = [shlex.quote(str(arg)) for arg in args]
+        escaped_kwargs = {k: shlex.quote(v) for k, v in kwargs.items()}
+        return cmd.format(*escaped_args, **escaped_kwargs)
 
-    def exit(self, message: str = "", code: int = 1):
-        if message:
-            print(message)
+    def print(
+        self,
+        *text: str,
+        sep: str = " ",
+        end: str | None = "\n",
+        color: str | None = None,
+        hex: str | None = None,
+    ):
+        print(self.color(sep.join(text), color=color, hex=hex), end=end)
+
+
+    def exit(
+        self,
+        *text: str,
+        code: int = 1,
+        sep: str = " ",
+        end: str | None = "\n",
+        color: str | None = None,
+        hex: str | None = None,
+    ):
+        if text:
+            string = self.color(sep.join(text), color=color, hex=hex)
+            print(string, end=end)
         sys.exit(code)
 
 
-class ArgsNamespace:
-    _positional: list[str]
-    _named: dict[str, str | list[str]]
+@final
+class Color:
+    reset = "\033[0m"
+    red = "\033[31m"
+    green = "\033[32m"
+    yellow = "\033[33m"
+    blue = "\033[34m"
+    magenta = "\033[35m"
+    cyan = "\033[36m"
 
+    def __call__(
+        self,
+        text: str,
+        *,
+        color: str | None = None,
+        hex: str | None = None,
+    ) -> str:
+        if not sys.stdout.isatty():
+            return text
+        if color is not None:
+            return f"{color}{text}{self.reset}"
+        if hex is not None:
+            hex = hex.lstrip("#")
+            r, g, b = int(hex[0:2], 16), int(hex[2:4], 16), int(hex[4:6], 16)
+            return f"\033[38;2;{r};{g};{b}m{text}{self.reset}"
+        return text
+
+@final
+class ArgsNamespace:
     def __init__(self, positional: list[str], named: dict[str, str | list[str]]):
         self._positional = positional
         self._named = named
@@ -119,8 +165,7 @@ class ArgsNamespace:
         Example:
             program -I test --interface prod
 
-            If `values = shell.args["I", "interface"]` is used, you get both
-            values.
+            If `values = shell.args["I", "interface"]` is used, you get both values.
         """
 
     def __getitem__(self, key: str | int | tuple[str, ...]) -> str | list[str] | None:
@@ -248,20 +293,15 @@ def _run_raw(cmd: str):
 
 def _read_raw(cmd: str, exit_on_error: bool):
     cmd = cmd.strip()
-    try:
-        result = subprocess.run(
-            cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-        )
-        if exit_on_error and result.returncode != 0:
-            sys.exit(result.returncode)
-        return result.stdout.strip() or "", result.returncode
-    except KeyboardInterrupt as e:
-        raise e
-    except Exception:
-        return "", 1
+    result = subprocess.run(
+        cmd,
+        shell=True,
+        capture_output=True,
+        text=True,
+    )
+    if exit_on_error and result.returncode != 0:
+        sys.exit(result.returncode)
+    return result.stdout.strip() or "", result.returncode
 
 
 shell = Shell()
