@@ -37,7 +37,7 @@ class Shell:
     def __init__(self):
         self.args = _parse_args()
 
-    def __call__(self, cmd: str, *args: str, exit_on_error: bool = True) -> int:
+    def __call__(self, cmd: str, *args: str):
         """
         Execute command with optional argument escaping and TTY support.
 
@@ -53,13 +53,13 @@ class Shell:
             escaped_args = [shlex.quote(str(arg)) for arg in args]
             cmd = cmd.format(*escaped_args)
 
-        return _run_raw(cmd, exit_on_error)
+        _run_raw(cmd)
 
     def read(
         self,
         cmd: str,
         *args: str,
-        exit_on_error: bool = True,
+        exit_on_error: bool = False,
     ) -> tuple[str, int]:
         """
         Read output from command with optional argument escaping.
@@ -67,10 +67,6 @@ class Shell:
         Usage:
             shell.read("ls -la")
             shell.read("find {} -name {}", "/path", "*.py")
-
-        Returns:
-            Either str if exit_on_error is True or tuple[str, int] with both
-            output and code if exit_on_error is False.
         """
         if args:
             escaped_args = [shlex.quote(str(arg)) for arg in args]
@@ -91,7 +87,7 @@ class Shell:
         else:
             cmd = item
             args = ()
-        return self.read(cmd, *args)[0]
+        return self.read(cmd, *args, exit_on_error=True)[0]
 
 
     def exit(self, message: str = "", code: int = 1):
@@ -240,17 +236,15 @@ def _parse_args():
     return ArgsNamespace(positional, named)
 
 
-def _run_raw(cmd: str, exit_on_error: bool = True) -> int:
+def _run_raw(cmd: str):
     cmd = cmd.strip()
     try:
         result = subprocess.run(cmd, shell=True)
     except KeyboardInterrupt:
         sys.exit(0)
 
-    if exit_on_error and result.returncode != 0:
+    if result.returncode != 0:
         sys.exit(result.returncode)
-
-    return result.returncode
 
 def _read_raw(cmd: str, exit_on_error: bool):
     cmd = cmd.strip()
@@ -262,8 +256,6 @@ def _read_raw(cmd: str, exit_on_error: bool):
             text=True,
         )
         if exit_on_error and result.returncode != 0:
-            print(result.stdout.strip())
-            print(result.stderr.strip())
             sys.exit(result.returncode)
         return result.stdout.strip() or "", result.returncode
     except KeyboardInterrupt as e:

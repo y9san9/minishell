@@ -36,8 +36,8 @@ filename = "file with spaces.txt"
 shell("rm {}", filename)
 
 # Capture output
-result = shell["pwd"]
-print("Current dir:", result.output)
+output = shell["pwd"]
+print("Current dir:", output)
 
 # Arguments are auto-parsed
 app_name = shell.args.app_name
@@ -47,32 +47,45 @@ if not app_name:
 
 ## API
 
-### `shell(cmd, *args, exit_on_error=True)`
+### `shell(cmd, *args)`
 
 Execute a command with optional argument escaping.
 
 - **cmd**: Command string with optional `{}` placeholders
 - **args**: Arguments to format and escape
-- **exit_on_error**: Exit on non-zero exit code (default: True)
 
 ```python
-shell("echo hello")                      # raw
-shell("echo {}", "hello")                # with escaping
-shell("ls", exit_on_error=False)         # don't exit on error
+shell("echo hello")           # raw
+shell("echo {}", "hello")     # with escaping
 ```
 
 ### `shell[cmd, *args]`
 
-Execute command and capture output.
+Execute command and capture output. Returns the output string.
 
 ```python
-result = shell["pwd"]
-print(result)
+output = shell["pwd"]
+# With escaped arguments
+output = shell["find {} -name {}", "/path", "*.py"]
+```
+
+### `shell.read(cmd, *args, exit_on_error=False)`
+
+Execute command and capture output with more control.
+
+- Returns `tuple[output, exit_code]`
+- Set `exit_on_error=True` to exit on non-zero code
+  (usually it's better to use `shell[cmd, *args]` instead)
+
+```python
+output, code = shell.read("ls")
+output, code = shell.read("find {} -name {}", "/path", "*.py", exit_on_error=True)
 ```
 
 ### `shell.args`
 
 Automatically parsed command-line arguments.
+
 ```python
 # Positional
 print(shell.args[0])
@@ -88,6 +101,7 @@ if isinstance(shell.args.file, list):
 ```
 
 ## Installation
+
 ```bash
 pip install minishell
 ```
