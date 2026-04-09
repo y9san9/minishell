@@ -286,19 +286,24 @@ def _run_raw(cmd: str):
     try:
         result = subprocess.run(cmd, shell=True)
     except KeyboardInterrupt:
-        sys.exit(0)
+        sys.exit(130)
 
     if result.returncode != 0:
         sys.exit(result.returncode)
 
 def _read_raw(cmd: str, exit_on_error: bool):
     cmd = cmd.strip()
-    result = subprocess.run(
-        cmd,
-        shell=True,
-        capture_output=True,
-        text=True,
-    )
+
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+        )
+    except KeyboardInterrupt:
+        sys.exit(130)
+
     if exit_on_error and result.returncode != 0:
         sys.exit(result.returncode)
     return result.stdout.strip() or "", result.returncode
