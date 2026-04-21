@@ -118,8 +118,8 @@ class Shell:
         hex: str | None = None,
     ):
         if text:
-            string = self.color(sep.join(text), color=color, hex=hex)
-            print(string, end=end)
+            error = code != 0
+            self.print(*text, sep=sep, end=end, color=color, hex=hex, error=error)
         sys.exit(code)
 
 
