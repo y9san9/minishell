@@ -98,8 +98,14 @@ class Shell:
         end: str | None = "\n",
         color: str | None = None,
         hex: str | None = None,
+        error: bool = False,
     ):
-        print(self.color(sep.join(text), color=color, hex=hex), end=end)
+        if error:
+            file = sys.stderr
+        else:
+            file = sys.stdout
+        string = self.color(sep.join(text), color=color, hex=hex)
+        print(string, end=end, file=file)
 
 
     def exit(
